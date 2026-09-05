@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jalnidhi — 3D Model</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; background: #060f1c; overflow: hidden; font-family: 'IBM Plex Mono', monospace; }
+
+  #canvas-wrap { width: 100%; height: 100%; position: relative; }
+
+  #ui {
+    position: absolute;
+    top: 24px; left: 24px;
+    display: flex; flex-direction: column; gap: 10px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .title-block {
+    background: rgba(8,22,44,0.85);
+    border: 1px solid #2A5580;
+    padding: 14px 18px;
+    backdrop-filter: blur(6px);
+  }
+  .title-block .proj { font-size: 9px; letter-spacing: 0.2em; color: #4A6E96; }
+  .title-block h1 { font-size: 22px; font-weight: 700; color: #F2F7FF; letter-spacing: -0.02em; margin-top: 2px; font-family: 'Space Grotesk', sans-serif; }
+  .title-block p { font-size: 10px; color: #9FC1E8; margin-top: 4px; }
+
+  #controls {
+    position: absolute;
+    bottom: 24px; left: 24px;
+    display: flex; gap: 8px;
+    z-index: 10;
+  }
+  .btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #9FC1E8;
+    background: rgba(8,22,44,0.85);
+    border: 1px solid #2A5580;
+    padding: 8px 14px;
+    cursor: pointer;
+    pointer-events: all;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn:hover { border-color: #FF7A45; color: #FF7A45; }
+  .btn.active { border-color: #FF7A45; color: #FF7A45; background: rgba(255,122,69,0.1); }
+
+  #legend {
+    position: absolute;
+    top: 24px; right: 24px;
+    background: rgba(8,22,44,0.85);
+    border: 1px solid #2A5580;
+    padding: 14px 16px;
+    backdrop-filter: blur(6px);
+    z-index: 10;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .legend-row { display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .legend-label { font-size: 9px; color: #9FC1E8; letter-spacing: 0.1em; }
+
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(8,22,44,0.92);
+    border: 1px solid #FF7A45;
+    padding: 8px 12px;
+    z-index: 20;
+    display: none;
+    max-width: 200px;
+  }
+  #tooltip .tt-name { font-size: 11px; color: #FF7A45; margin-bottom: 4px; }
+  #tooltip .tt-desc { font-size: 9px; color: #9FC1E8; line-height: 1.5; }
+
+  #hint {
+    position: absolute; bottom: 24px; right: 24px;
+    font-size: 9px; color: #2A5580; letter-spacing: 0.1em;
+    text-align: right;
+    line-height: 1.7;
+  }
+
+  .phase-label {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 11px; color: #FF7A45; letter-spacing: 0.2em;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .phase-label.visible { opacity: 1; }
+
+  #hud {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(8,22,44,0.88);
+    border: 1px solid #2A5580;
+    padding: 12px 20px;
+    backdrop-filter: blur(6px);
+    z-index: 10;
+    display: flex;
+    gap: 22px;
+    align-items: center;
+  }
+  .hud-row { display: flex; flex-direction: column; gap: 3px; align-items: center; }
+  .hud-key { font-size: 8px; letter-spacing: 0.15em; color: #4A6E96; }
+  .hud-val { font-size: 12px; color: #F2F7FF; font-weight: 500; min-width: 90px; text-align: center; }
+  .hud-val.warn { color: #FF7A45; }
+  .hud-val.lock { color: #FF4444; }
+  .hud-battery { min-width: 90px; }
+  .batt-bar { width: 90px; height: 8px; border: 1px solid #4A6E96; margin-top: 2px; overflow: hidden; }
+  .batt-fill { height: 100%; width: 0%; background: #6FCF7A; transition: width 0.3s, background 0.3s; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+
+  <div id="ui">
+    <div class="title-block">
+      <div class="proj">TEAM HACKOPHILES · AKGEC · GHAZIABAD</div>
+      <h1>Jalnidhi</h1>
+      <p>Autonomous Rainwater Harvesting System — 3D Model</p>
+    </div>
+  </div>
+
+  <div id="legend">
+    <div class="legend-row"><div class="swatch" style="background:#FF7A45"></div><div class="legend-label">Inflatable Cup</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#A8C0D8"></div><div class="legend-label">Hydraulic Cylinder</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#4A90C4;opacity:0.7"></div><div class="legend-label">Underground Tank</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#68A0C8"></div><div class="legend-label">Purification Stages</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#3A7ABF"></div><div class="legend-label">Plumbing / Pipes</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#F2F7FF;opacity:0.5"></div><div class="legend-label">Soil / Ground</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#2D5C38"></div><div class="legend-label">Grass Surface</div></div>
+    <div class="legend-row"><div class="swatch" style="background:#E8E8E8"></div><div class="legend-label">Wind Turbine</div></div>
+  </div>
+
+  <div id="hud">
+    <div class="hud-row"><span class="hud-key">RAIN</span><span class="hud-val" id="hud-rain">—</span></div>
+    <div class="hud-row"><span class="hud-key">WIND SPEED</span><span class="hud-val" id="hud-wind">—</span></div>
+    <div class="hud-row"><span class="hud-key">SYSTEM</span><span class="hud-val" id="hud-system">—</span></div>
+    <div class="hud-row"><span class="hud-key">PURIFIER</span><span class="hud-val" id="hud-purifier">—</span></div>
+    <div class="hud-row hud-battery"><span class="hud-key">BATTERY</span><div class="batt-bar"><div class="batt-fill" id="hud-batt-fill"></div></div></div>
+  </div>
+
+  <div id="controls">
+    <button class="btn active" id="btn-animate">⟳ ANIMATE</button>
+    <button class="btn" id="btn-cutaway">◧ CUTAWAY</button>
+    <button class="btn" id="btn-labels">⊕ LABELS</button>
+    <button class="btn" id="btn-reset">⌂ RESET VIEW</button>
+  </div>
+
+  <div id="tooltip">
+    <div class="tt-name" id="tt-name"></div>
+    <div class="tt-desc" id="tt-desc"></div>
+  </div>
+
+  <div id="hint">
+    DRAG to orbit · SCROLL to zoom<br>
+    RIGHT-DRAG to pan · HOVER parts for info
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ── Canvas & Renderer ──────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x060f1c);
+scene.fog = new THREE.Fog(0x060f1c, 18, 40);
+
+// ── Camera ────────────────────────────────────────────────────────
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+camera.position.set(6, 5, 7);
+camera.lookAt(0, -0.5, 0);
+
+// ── Materials ─────────────────────────────────────────────────────
+const M = {
+  steel:    new THREE.MeshStandardMaterial({ color: 0xA8C0D8, metalness: 0.75, roughness: 0.28 }),
+  steel2:   new THREE.MeshStandardMaterial({ color: 0x7090A8, metalness: 0.75, roughness: 0.3 }),
+  cup:      new THREE.MeshStandardMaterial({ color: 0xFF7A45, transparent: true, opacity: 0.82, roughness: 0.25, side: THREE.DoubleSide }),
+  tank:     new THREE.MeshStandardMaterial({ color: 0x4A90C4, transparent: true, opacity: 0.45, roughness: 0.3, side: THREE.DoubleSide }),
+  tankWall: new THREE.MeshStandardMaterial({ color: 0x4A90C4, transparent: true, opacity: 0.22, roughness: 0.3, side: THREE.BackSide }),
+  purif:    [
+    new THREE.MeshStandardMaterial({ color: 0xC8D8E8, roughness: 0.5 }),  // mesh
+    new THREE.MeshStandardMaterial({ color: 0x8898A8, roughness: 0.5 }),  // sediment
+    new THREE.MeshStandardMaterial({ color: 0xFF8866, roughness: 0.35 }), // carbon (orange)
+    new THREE.MeshStandardMaterial({ color: 0x80CCFF, roughness: 0.2, emissive: 0x1144AA, emissiveIntensity: 0.4 }), // UV (glow)
+    new THREE.MeshStandardMaterial({ color: 0xDDEEFF, roughness: 0.2, transparent: true, opacity: 0.85 }), // RO
+  ],
+  pipe:     new THREE.MeshStandardMaterial({ color: 0x3A7ABF, metalness: 0.5, roughness: 0.4 }),
+  soil:     new THREE.MeshStandardMaterial({ color: 0x3A2510, roughness: 1.0 }),
+  soil2:    new THREE.MeshStandardMaterial({ color: 0x2E1D0C, roughness: 1.0 }),
+  grass:    new THREE.MeshStandardMaterial({ color: 0x2D5C38, roughness: 0.9 }),
+  gravel:   new THREE.MeshStandardMaterial({ color: 0x556070, roughness: 0.85 }),
+  solar:    new THREE.MeshStandardMaterial({ color: 0x0A1830, metalness: 0.6, roughness: 0.2, emissive: 0x0A1830 }),
+  sensorRed: new THREE.MeshStandardMaterial({ color: 0xFF4444, emissive: 0xFF2222, emissiveIntensity: 0.6 }),
+  outlet:   new THREE.MeshStandardMaterial({ color: 0x68A0C8, roughness: 0.4 }),
+  water:    new THREE.MeshStandardMaterial({ color: 0x4488BB, transparent: true, opacity: 0.55, roughness: 0.1, emissive: 0x112233, emissiveIntensity: 0.2 }),
+};
+
+// ── Geometry helpers ───────────────────────────────────────────────
+function box(w,h,d){ return new THREE.BoxGeometry(w,h,d); }
+function cyl(rt,rb,h,seg=24){ return new THREE.CylinderGeometry(rt,rb,h,seg); }
+
+function mesh(geo, mat, x=0,y=0,z=0, rx=0,ry=0,rz=0) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(x,y,z);
+  m.rotation.set(rx,ry,rz);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+
+function pipe(x1,y1,z1, x2,y2,z2, r=0.045) {
+  const p1 = new THREE.Vector3(x1,y1,z1), p2 = new THREE.Vector3(x2,y2,z2);
+  const dir = p2.clone().sub(p1);
+  const len = dir.length();
+  const mid = p1.clone().add(p2).multiplyScalar(0.5);
+  const geo = cyl(r,r,len,12);
+  const m = new THREE.Mesh(geo, M.pipe);
+  m.position.copy(mid);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.normalize());
+  m.castShadow = true;
+  return m;
+}
+
+// ── Tooltip metadata ──────────────────────────────────────────────
+const INFO = {};
+function tag(obj, name, desc) { INFO[obj.uuid] = { name, desc }; return obj; }
+
+// ══════════════════════════════════════════════════════════════════
+// BUILD THE SCENE
+// ══════════════════════════════════════════════════════════════════
+
+const root = new THREE.Group();
+scene.add(root);
+
+// ── GROUND ────────────────────────────────────────────────────────
+// Grass surface (two sections, leaving the cutaway gap)
+const grassF = mesh(box(8,0.12,3), M.grass, 0,0,2.5);
+tag(grassF, 'Ground Surface', 'Mowed grass above the installation. Zero permanent footprint when unit is retracted.');
+root.add(grassF);
+const grassL = mesh(box(1.5,0.12,4), M.grass, -3.25,0,0.5);
+root.add(grassL);
+const grassR = mesh(box(1.5,0.12,4), M.grass,  3.25,0,0.5);
+root.add(grassR);
+
+// Soil cutaway walls (back, left, right, floor) — show underground cross-section
+const soilBack = mesh(box(8,3.2,0.18), M.soil, 0,-1.6,-2);
+root.add(soilBack);
+const soilL = mesh(box(0.18,3.2,4), M.soil, -2.5,-1.6,0);
+root.add(soilL);
+const soilR = mesh(box(0.18,3.2,4), M.soil,  2.5,-1.6,0);
+root.add(soilR);
+const soilFloor = mesh(box(5,0.18,4), M.soil2, 0,-3.1,0);
+root.add(soilFloor);
+
+// Gravel drainage layer
+const gravel = mesh(box(4.5,0.18,3.5), M.gravel, 0,-2.95,0);
+tag(gravel, 'Gravel Drainage Layer', 'Crushed stone bed prevents waterlogging around the buried tank and improves seepage.');
+root.add(gravel);
+
+// Ground-level concrete collar around the shaft
+const collar = mesh(cyl(0.35,0.35,0.08), M.steel2, 0,0.04,0);
+tag(collar, 'Flush Surface Cover', 'Load-rated concrete collar (handles foot + light vehicle traffic). Sits level with ground when retracted.');
+root.add(collar);
+
+// ── TELESCOPING MECHANISM ─────────────────────────────────────────
+// Outer casing (static, flush with ground)
+const outer = mesh(cyl(0.25,0.25,3.0), M.steel2, 0,-1.56,0);
+tag(outer, 'Outer Casing (Ground-Mounted)', 'Stainless-steel housing fixed in the concrete collar. Guides the telescoping stages and carries plumbing.');
+root.add(outer);
+
+// Stage 2 – mid telescope (slightly risen)
+const stage2 = mesh(cyl(0.19,0.19,2.2), M.steel, 0,-0.6,0);
+tag(stage2, 'Telescoping Stage 2', 'Second hydraulic stage extends when rain is detected, pushing the cup to collection height.');
+root.add(stage2);
+
+// Stage 3 – inner rod (extends furthest, holds cup)
+const stage3 = mesh(cyl(0.13,0.13,1.4), M.steel, 0,0.7,0);
+tag(stage3, 'Telescoping Stage 3 (Inner Rod)', 'Hollow stainless rod — carries collected water downward through the centre while extending the cup upward.');
+root.add(stage3);
+
+// Hydraulic actuator cylinder alongside
+const actuator = mesh(cyl(0.055,0.055,2.2), M.steel2, 0.42,-0.5,0.22);
+tag(actuator, 'Hydraulic Actuator (12V DC)', 'Double-acting hydraulic ram, 300–600 mm stroke. Drives full extension in under 30 seconds. Stainless rod, corrosion-resistant.');
+root.add(actuator);
+const actPiston = mesh(cyl(0.04,0.04,1.0), M.steel, 0.42,0.4,0.22);
+root.add(actPiston);
+
+// ── INFLATABLE CUP ────────────────────────────────────────────────
+// Wide funnel/bowl profile — maximises catchment area for the collection cup.
+const CUP_Y = 1.55;
+const CUP_MAX_R = 1.55;   // fully inflated opening radius (wide catchment)
+const CUP_MIN_R = 0.55;   // collapsed / resting radius
+function cupProfile(r) {
+  // r scales the outer lip radius; inner points scale proportionally
+  const k = r / CUP_MAX_R;
+  return [
+    new THREE.Vector2(0.13, 0),
+    new THREE.Vector2(0.15 + 0.04*k, 0.08),
+    new THREE.Vector2(0.20 + 0.30*k, 0.20),
+    new THREE.Vector2(0.28 + 0.75*k, 0.36),
+    new THREE.Vector2(0.34 + 1.15*k, 0.52),
+    new THREE.Vector2(r, 0.66),
+  ];
+}
+const cupGeo = new THREE.LatheGeometry(cupProfile(CUP_MIN_R), 48);
+const cup = new THREE.Mesh(cupGeo, M.cup);
+cup.position.set(0, CUP_Y, 0);
+tag(cup, 'Inflatable Collection Cup', 'Food-grade TPU/silicone membrane. Inflates from ~1.1m to a wide 3.1m-diameter catchment dome in seconds via micro-compressor, maximising rainfall capture. Collapse ratio ~8:1. UV & weather resistant.');
+root.add(cup);
+
+// Cup rim ring (tracks inflation radius)
+const rim = new THREE.Mesh(new THREE.TorusGeometry(CUP_MIN_R, 0.025, 10, 48), M.steel);
+rim.position.set(0, CUP_Y + 0.66, 0);
+rim.rotation.x = Math.PI / 2;
+root.add(rim);
+
+// Faint catchment-area disc showing full inflated coverage (helps read "maximum capture")
+const catchGeo = new THREE.CircleGeometry(CUP_MAX_R, 48);
+const catchMat = new THREE.MeshBasicMaterial({ color: 0xFF7A45, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false });
+const catchDisc = new THREE.Mesh(catchGeo, catchMat);
+catchDisc.rotation.x = -Math.PI / 2;
+catchDisc.position.set(0, CUP_Y + 0.665, 0);
+root.add(catchDisc);
+
+// Rain droplets — dense field, spread across the full inflated catchment area
+const drops = [];
+const DROP_COUNT = 400;
+const dropGeo = new THREE.SphereGeometry(0.018, 5, 5);
+for (let i = 0; i < DROP_COUNT; i++) {
+  const d = new THREE.Mesh(
+    dropGeo,
+    new THREE.MeshStandardMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.75, emissive: 0x4488BB, emissiveIntensity: 0.3 })
+  );
+  const angle = Math.random() * Math.PI * 2;
+  const r = Math.random() * (CUP_MAX_R + 0.6); // some miss the cup on purpose (realism) but most land inside
+  d.position.set(Math.cos(angle)*r, CUP_Y + 2.0 + Math.random() * 3.5, Math.sin(angle)*r);
+  d._speed = 0.05 + Math.random() * 0.05;
+  d._startY = d.position.y;
+  d._r = r;
+  d._angle = angle;
+  d._active = true;
+  root.add(d);
+  drops.push(d);
+}
+// Splash rings pool (reused when a drop lands inside the cup)
+const splashes = [];
+const splashGeo = new THREE.RingGeometry(0.01, 0.03, 16);
+const splashMatBase = { color: 0xBEE0FF, transparent: true, side: THREE.DoubleSide, depthWrite: false };
+for (let i = 0; i < 40; i++) {
+  const s = new THREE.Mesh(splashGeo, new THREE.MeshBasicMaterial({ ...splashMatBase, opacity: 0 }));
+  s.rotation.x = -Math.PI / 2;
+  s.visible = false;
+  root.add(s);
+  splashes.push(s);
+}
+let splashIdx = 0;
+
+// ── UNDERGROUND STORAGE TANK ──────────────────────────────────────
+const TANK_X = -1.3, TANK_Y = -1.9, TANK_Z = -0.6;
+const tankBody = mesh(box(1.6, 1.0, 1.1), M.tank, TANK_X, TANK_Y, TANK_Z);
+tag(tankBody, 'Underground Storage Tank (HDPE)', 'Buried HDPE tank, 500–5000 L configurable. Sealed, no evaporation. Float + ultrasonic level sensors. Overflow redirect valve.');
+root.add(tankBody);
+// Inner wireframe for realism
+const tankWire = new THREE.Mesh(box(1.6, 1.0, 1.1), M.tankWall);
+tankWire.position.copy(tankBody.position);
+root.add(tankWire);
+
+// Water fill inside tank (~78% full matching doc)
+const waterFill = mesh(box(1.55,0.72,1.05), M.water, TANK_X, TANK_Y-0.07, TANK_Z);
+root.add(waterFill);
+
+// Manhole cover
+const manhole = mesh(cyl(0.2,0.2,0.06), M.steel2, TANK_X, TANK_Y+0.53, TANK_Z);
+tag(manhole, 'Tank Manhole', 'Sealed manhole for inspection and maintenance access.');
+root.add(manhole);
+
+// ── PURIFICATION STAGES ───────────────────────────────────────────
+const PUR_X = 1.2, PUR_Y_BASE = -2.55, PUR_Z = -0.5;
+const stageH = 0.22;
+const stageNames = ['Stage 1 — Mesh Pre-filter','Stage 2 — Sediment Cartridge','Stage 3 — Activated Carbon','Stage 4 — UV Sterilisation','Stage 5 — RO Membrane'];
+const stageDescs = [
+  'Removes leaves, debris, insects at entry. First line of defence.',
+  '5-micron cartridge traps fine particles and sediment.',
+  'Activated carbon removes chlorine, odour, dissolved organics.',
+  'UV-C lamp neutralises bacteria and viruses without chemicals.',
+  'Optional reverse-osmosis membrane for drinking-water purity (TDS <50 ppm).',
+];
+for (let i = 0; i < 5; i++) {
+  const y = PUR_Y_BASE + i * (stageH + 0.03) + stageH/2;
+  const stage = mesh(cyl(0.19,0.19,stageH,18), M.purif[i], PUR_X, y, PUR_Z);
+  tag(stage, stageNames[i], stageDescs[i]);
+  root.add(stage);
+}
+// UV glow light inside stage 4
+const uvLight = new THREE.PointLight(0x4499FF, 0.8, 0.5);
+uvLight.position.set(PUR_X, PUR_Y_BASE + 3*(stageH+0.03)+stageH/2, PUR_Z);
+root.add(uvLight);
+
+// ── CONTROL UNIT (IP67) ───────────────────────────────────────────
+const ctrl = mesh(box(0.38,0.22,0.28), M.soil, PUR_X, PUR_Y_BASE + 5*(stageH+0.03) + 0.18, PUR_Z);
+tag(ctrl, 'Control Unit — IP67 Enclosure', 'Raspberry Pi 5 / ESP32 core. 4G/WiFi. Relay board, LiFePO4 battery backup (20Ah, 48h autonomy), solar-ready. Runs AI weather prediction + MQTT distribution.');
+ctrl.material = new THREE.MeshStandardMaterial({ color: 0x111E2C, roughness: 0.6 });
+root.add(ctrl);
+// Status LED
+const led = mesh(new THREE.SphereGeometry(0.03), new THREE.MeshStandardMaterial({ color: 0x00FF88, emissive: 0x00FF88, emissiveIntensity: 1.2 }), PUR_X + 0.17, PUR_Y_BASE + 5*(stageH+0.03) + 0.22, PUR_Z + 0.1);
+root.add(led);
+
+// ── SENSOR MAST (above ground) ────────────────────────────────────
+const MAST_X = 1.1, MAST_Z = 1.2;
+const mast = mesh(cyl(0.025,0.025,1.1), M.steel2, MAST_X, 0.55, MAST_Z);
+tag(mast, 'Sensor Mast', 'Houses rain sensor, piezo gauge, temperature probe. Sends signal to controller within milliseconds of first drop.');
+root.add(mast);
+const sensorBox = mesh(box(0.12,0.10,0.10), new THREE.MeshStandardMaterial({ color: 0x1A2D3A, roughness: 0.4 }), MAST_X, 1.15, MAST_Z);
+tag(sensorBox, 'Rain Sensor Array', 'Optical rain sensor + piezoelectric rainfall gauge. Dual-redundant detection — triggers cup deployment on first drop, retraction after 5-min dry window.');
+root.add(sensorBox);
+// Optical sensor bead
+const sensLED = mesh(new THREE.SphereGeometry(0.028), M.sensorRed, MAST_X, 1.22, MAST_Z + 0.06);
+root.add(sensLED);
+
+// Solar panel
+const solarPanel = mesh(box(0.5,0.32,0.016), M.solar, MAST_X + 0.32, 1.05, MAST_Z - 0.05);
+solarPanel.rotation.z = Math.PI * 0.13;
+tag(solarPanel, 'Solar Panel (50W)', 'Optional 50W photovoltaic panel on the unit. Charges the LiFePO4 battery backup for off-grid/extended operation.');
+root.add(solarPanel);
+// Solar cell lines
+const cellMat = new THREE.MeshStandardMaterial({ color: 0x0D2040, roughness: 0.3 });
+for (let cx = 0; cx < 4; cx++) {
+  for (let cy = 0; cy < 3; cy++) {
+    const cell = mesh(box(0.1,0.08,0.005), cellMat,
+      MAST_X + 0.32 - 0.18 + cx*0.12,
+      1.05 - 0.1 + cy*0.1,
+      MAST_Z - 0.05 + 0.01
+    );
+    cell.rotation.z = Math.PI * 0.13;
+    root.add(cell);
+  }
+}
+
+// Ground sensor pucks (TDS, pH, turbidity near entry)
+const puckGeo = cyl(0.055,0.055,0.04,12);
+[[-0.3,0,-1.7],[0.0,0,-1.7],[0.3,0,-1.7]].forEach(([px,py,pz],i) => {
+  const puck = mesh(puckGeo, M.sensorRed, px, py+0.02, pz);
+  tag(puck, ['TDS Meter','pH Sensor','Turbidity Sensor'][i], ['Measures dissolved solids — triggers extra filtration above 500 ppm.','pH monitoring — blocks drinking outlet if pH < 6.5 or > 8.5.','Clarity sensor — detects silt or contamination events.'][i]);
+  root.add(puck);
+});
+
+// ── WIND TURBINE + ANEMOMETER (self-power generation) ─────────────
+const TURB_X = -1.9, TURB_Z = 1.6;
+const turbineGroup = new THREE.Group();
+turbineGroup.position.set(TURB_X, 0, TURB_Z);
+root.add(turbineGroup);
+
+const TOWER_H = 1.35;
+const tower = mesh(cyl(0.028,0.045,TOWER_H), M.steel2, 0, TOWER_H/2, 0);
+tag(tower, 'Wind Turbine Mast', 'Compact vertical-axis mast mounted on the unit lid. Positions the rotor clear of ground turbulence.');
+turbineGroup.add(tower);
+
+const nacelle = mesh(box(0.16,0.09,0.12), M.steel, 0, TOWER_H, 0.06);
+tag(nacelle, 'Turbine Generator (Self-Power)', 'Small DC generator driven by the rotor. Feeds the LiFePO4 battery so the unit runs on its own power — no grid draw for sensing, hydraulics standby, or the AI controller.');
+turbineGroup.add(nacelle);
+
+const rotorGroup = new THREE.Group();
+rotorGroup.position.set(0, TOWER_H, 0.13);
+turbineGroup.add(rotorGroup);
+const hub = mesh(new THREE.SphereGeometry(0.035, 10, 10), M.steel, 0, 0, 0);
+rotorGroup.add(hub);
+const bladeGeo = box(0.022, 0.34, 0.055);
+for (let i = 0; i < 3; i++) {
+  const bladeGroup = new THREE.Group();
+  bladeGroup.rotation.z = i * (Math.PI * 2 / 3);
+  const blade = mesh(bladeGeo, M.steel, 0, 0.20, 0);
+  bladeGroup.add(blade);
+  rotorGroup.add(bladeGroup);
+}
+
+// Anemometer (3-cup wind speed sensor) — separate small sensor on its own short mast
+const anemoGroup = new THREE.Group();
+anemoGroup.position.set(TURB_X + 0.35, TOWER_H - 0.1, TURB_Z - 0.3);
+root.add(anemoGroup);
+const anemoMast = mesh(cyl(0.012,0.012,0.28), M.steel2, 0, 0, 0);
+anemoGroup.add(anemoMast);
+const anemoSpin = new THREE.Group();
+anemoSpin.position.set(0, 0.16, 0);
+anemoGroup.add(anemoSpin);
+for (let i = 0; i < 3; i++) {
+  const arm = new THREE.Group();
+  arm.rotation.y = i * (Math.PI * 2 / 3);
+  const rod = mesh(cyl(0.006,0.006,0.11), M.steel2, 0, 0, 0.055, Math.PI/2, 0, 0);
+  const cupS = mesh(new THREE.SphereGeometry(0.028, 8, 8), M.sensorRed, 0, 0, 0.11);
+  arm.add(rod); arm.add(cupS);
+  anemoSpin.add(arm);
+}
+tag(anemoMast, 'Anemometer (Wind Sensor)', 'Continuously measures wind speed. If it exceeds the safe threshold, the controller keeps the whole unit locked underground — even while raining — to protect the inflatable cup and hydraulics from wind damage.');
+
+// ── PLUMBING / PIPES ──────────────────────────────────────────────
+// Telescope → Tank
+const p1 = pipe(0,  -0.05, 0,  TANK_X, TANK_Y+0.5, TANK_Z);
+tag(p1, 'Collection Pipe', 'Hollow centre of the cylinder channels rainwater directly into the underground tank via a pre-filter mesh.');
+root.add(p1);
+
+// Tank → Purifier intake
+const p2 = pipe(TANK_X+0.8, TANK_Y, TANK_Z+0.15,  PUR_X-0.2, PUR_Y_BASE+0.1, PUR_Z);
+tag(p2, 'Tank → Purifier Feed Pipe', 'Transfers raw stored water to the first purification stage on demand.');
+root.add(p2);
+
+// Distribution header (purifier top → surface outlets)
+const purTop = [PUR_X, PUR_Y_BASE + 5*stageH + 5*0.03 + 0.05, PUR_Z];
+const outlets = [
+  { name:'Drinking Water Outlet',  desc:'Post-UV/RO output. Quality-gated by TDS + pH sensors before release. Suitable for potable use.', pos:[1.9, 0.15, 0.6], color:0x66BBFF },
+  { name:'Irrigation Outlet',      desc:'Carbon-filtered (not RO). Compatible with drip or sprinkler systems. Lower pressure line.', pos:[2.2, 0.15, 1.2], color:0x44AA66 },
+  { name:'Household Use Outlet',   desc:'Toilets, laundry, floor cleaning. Carbon-filtered only — lower treatment cost.', pos:[1.9, 0.15, 1.8], color:0x8888CC },
+  { name:'Emergency Reserve',      desc:'20% of capacity kept sealed in a separate partition for crisis situations. Locked by default.', pos:[2.4, 0.15, 2.4], color:0xFFAA44 },
+];
+outlets.forEach(o => {
+  const OM = new THREE.MeshStandardMaterial({ color: o.color, roughness: 0.4 });
+  const box_ = mesh(box(0.22,0.22,0.22), OM, ...o.pos);
+  tag(box_, o.name, o.desc);
+  root.add(box_);
+  const pp = pipe(...purTop, o.pos[0], o.pos[1]+0.1, o.pos[2]);
+  root.add(pp);
+});
+
+// ── LABELS (sprites) ──────────────────────────────────────────────
+function makeLabel(text, position) {
+  const canvas2 = document.createElement('canvas');
+  canvas2.width = 320; canvas2.height = 56;
+  const ctx = canvas2.getContext('2d');
+  ctx.fillStyle = 'rgba(8,22,44,0.85)';
+  ctx.fillRect(0,0,320,56);
+  ctx.strokeStyle = '#2A5580';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(1,1,318,54);
+  ctx.font = '500 13px "IBM Plex Mono", monospace';
+  ctx.fillStyle = '#F2F7FF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 160, 28);
+  const tex = new THREE.CanvasTexture(canvas2);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.set(...position);
+  sprite.scale.set(1.4, 0.25, 1);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+const labelsGroup = new THREE.Group();
+root.add(labelsGroup);
+const labelData = [
+  ['Inflatable Cup (TPU/Silicone, ∅0.5–2m)', [1.4, 2.1, 0]],
+  ['Telescoping Hydraulic Cylinder', [1.7, 0.5, 0]],
+  ['Underground HDPE Tank (500–5000L)', [-1.3, -1.0, -0.6]],
+  ['5-Stage Purifier', [2.4, -1.2, -0.5]],
+  ['AI Control Unit (IP67, 4G/WiFi)', [2.6, -0.9, -0.5]],
+  ['Sensor Mast + Solar Panel', [2.2, 1.4, 1.2]],
+  ['Distribution Outlets (×4)', [3.4, 0.8, 1.5]],
+];
+labelData.forEach(([text, pos]) => {
+  labelsGroup.add(makeLabel(text, pos));
+});
+
+// ── LIGHTING ──────────────────────────────────────────────────────
+const sunLight = new THREE.DirectionalLight(0xEEEEFF, 2.0);
+sunLight.position.set(5, 8, 4);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 0.1;
+sunLight.shadow.camera.far = 30;
+sunLight.shadow.camera.left = -8; sunLight.shadow.camera.right = 8;
+sunLight.shadow.camera.top = 8; sunLight.shadow.camera.bottom = -8;
+scene.add(sunLight);
+
+const fillLight = new THREE.DirectionalLight(0x3355AA, 0.5);
+fillLight.position.set(-4, 3, -2);
+scene.add(fillLight);
+
+const ambient = new THREE.AmbientLight(0x1A2A3A, 1.8);
+scene.add(ambient);
+
+const rimLight = new THREE.DirectionalLight(0xFF7A45, 0.25);
+rimLight.position.set(0, -3, -5);
+scene.add(rimLight);
+
+// ── ORBIT CONTROLS (manual implementation) ──────────────────────
+let isDragging = false, isRightDrag = false;
+let lastMouse = { x: 0, y: 0 };
+let spherical = { theta: -0.8, phi: 0.85, radius: 11 };
+let panOffset = new THREE.Vector3(0, -0.5, 0);
+const target = new THREE.Vector3(0, -0.5, 0);
+
+function updateCamera() {
+  camera.position.x = target.x + panOffset.x + spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+  camera.position.y = target.y + panOffset.y + spherical.radius * Math.cos(spherical.phi);
+  camera.position.z = target.z + panOffset.z + spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+  camera.lookAt(target.x + panOffset.x, target.y + panOffset.y, target.z + panOffset.z);
+}
+updateCamera();
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  isRightDrag = e.button === 2;
+  lastMouse = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = (e.clientX - lastMouse.x) * 0.005;
+  const dy = (e.clientY - lastMouse.y) * 0.005;
+  if (isRightDrag) {
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    camera.getWorldDirection(right);
+    right.cross(camera.up).normalize();
+    panOffset.addScaledVector(right, -dx * spherical.radius * 0.5);
+    panOffset.y += dy * spherical.radius * 0.5;
+  } else {
+    spherical.theta -= dx;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI * 0.48, spherical.phi + dy));
+  }
+  lastMouse = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+
+canvas.addEventListener('wheel', e => {
+  spherical.radius = Math.max(2.5, Math.min(22, spherical.radius + e.deltaY * 0.008));
+  updateCamera();
+  e.preventDefault();
+}, { passive: false });
+
+// Touch support
+let lastTouches = [];
+canvas.addEventListener('touchstart', e => { lastTouches = [...e.touches]; });
+canvas.addEventListener('touchmove', e => {
+  if (e.touches.length === 1) {
+    const dx = (e.touches[0].clientX - lastTouches[0].clientX) * 0.007;
+    const dy = (e.touches[0].clientY - lastTouches[0].clientY) * 0.007;
+    spherical.theta -= dx;
+    spherical.phi = Math.max(0.1, Math.min(Math.PI*0.48, spherical.phi + dy));
+    updateCamera();
+  } else if (e.touches.length === 2) {
+    const d0 = Math.hypot(lastTouches[0].clientX - lastTouches[1].clientX, lastTouches[0].clientY - lastTouches[1].clientY);
+    const d1 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    spherical.radius = Math.max(2.5, Math.min(22, spherical.radius * (d0/d1)));
+    updateCamera();
+  }
+  lastTouches = [...e.touches];
+  e.preventDefault();
+}, { passive: false });
+
+// ── RAYCASTER / TOOLTIP ───────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse2d = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+const ttName = document.getElementById('tt-name');
+const ttDesc = document.getElementById('tt-desc');
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse2d.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse2d.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse2d, camera);
+  const intersects = raycaster.intersectObjects(root.children, true)
+    .filter(i => INFO[i.object.uuid]);
+
+  if (intersects.length) {
+    const info = INFO[intersects[0].object.uuid];
+    ttName.textContent = info.name;
+    ttDesc.textContent = info.desc;
+    tooltip.style.display = 'block';
+    tooltip.style.left = (e.clientX + 14) + 'px';
+    tooltip.style.top  = (e.clientY - 10) + 'px';
+  } else {
+    tooltip.style.display = 'none';
+  }
+});
+canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+// ── UI BUTTONS ─────────────────────────────────────────────────────
+let animating = true;
+let cutaway = false;
+let labelsOn = true;
+
+document.getElementById('btn-animate').addEventListener('click', function() {
+  animating = !animating;
+  this.classList.toggle('active', animating);
+});
+
+document.getElementById('btn-cutaway').addEventListener('click', function() {
+  cutaway = !cutaway;
+  this.classList.toggle('active', cutaway);
+  // toggle soil wall visibility
+  soilBack.visible = !cutaway;
+  soilL.visible = !cutaway;
+  soilR.visible = !cutaway;
+  soilFloor.visible = !cutaway;
+  gravel.visible = !cutaway;
+  grassL.visible = !cutaway;
+  grassR.visible = !cutaway;
+});
+
+document.getElementById('btn-labels').addEventListener('click', function() {
+  labelsOn = !labelsOn;
+  labelsGroup.visible = labelsOn;
+  this.classList.toggle('active', labelsOn);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  spherical = { theta: -0.8, phi: 0.85, radius: 11 };
+  panOffset.set(0, -0.5, 0);
+  updateCamera();
+});
+
+// ── WEATHER / SAFETY STATE MACHINE ────────────────────────────────
+// Scenario timeline (seconds) the whole system cycles through, driving
+// hydraulic deployment, wind lockout, turbine speed and the HUD.
+const SCENARIO = [
+  { t0: 0,  t1: 6,  rain: false, windLabel: 'CALM',      windKmh: 6,  locked: false },
+  { t0: 6,  t1: 15, rain: true,  windLabel: 'SAFE',       windKmh: 14, locked: false },
+  { t0: 15, t1: 22, rain: true,  windLabel: 'HIGH',       windKmh: 46, locked: true  },
+  { t0: 22, t1: 28, rain: false, windLabel: 'MODERATE',   windKmh: 22, locked: false },
+];
+const CYCLE_LEN = 28;
+function getScenario(t) {
+  const ct = t % CYCLE_LEN;
+  return SCENARIO.find(s => ct >= s.t0 && ct < s.t1) || SCENARIO[0];
+}
+
+let inflateFracState = 0;   // smoothed 0→1 deployment amount, persists across frames
+let batteryLevel = 62;      // %, charged by the turbine, drained by hydraulics/AI
+
+const hudRain = document.getElementById('hud-rain');
+const hudWind = document.getElementById('hud-wind');
+const hudSystem = document.getElementById('hud-system');
+const hudPurifier = document.getElementById('hud-purifier');
+const hudBattFill = document.getElementById('hud-batt-fill');
+let lastHudUpdate = 0;
+
+// Continuous purification flow particles (tank → purifier → outlets),
+// independent of whether it's currently raining — stored water is always
+// being cycled through the purifier.
+const flowParticles = [];
+for (let i = 0; i < 10; i++) {
+  const fp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.03, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x66CCFF, emissive: 0x2266AA, emissiveIntensity: 0.5, transparent: true, opacity: 0.85 })
+  );
+  fp._t = i / 10;
+  root.add(fp);
+  flowParticles.push(fp);
+}
+const flowPath = [
+  new THREE.Vector3(TANK_X + 0.8, TANK_Y + 0.2, TANK_Z + 0.15),
+  new THREE.Vector3(PUR_X - 0.2, PUR_Y_BASE + 0.1, PUR_Z),
+  new THREE.Vector3(PUR_X, PUR_Y_BASE + 5*(stageH+0.03), PUR_Z),
+  new THREE.Vector3(1.9, 0.15, 0.6),
+];
+function resize() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── ANIMATION LOOP ────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  const scenario = getScenario(t);
+  const shouldDeploy = scenario.rain && !scenario.locked;
+
+  if (animating) {
+    // ── Inflate / deploy only when it's raining AND wind is safe ──
+    const targetFrac = shouldDeploy ? 1 : 0;
+    inflateFracState += (targetFrac - inflateFracState) * 0.02;
+    const inflateFrac = inflateFracState;
+    const currentR = CUP_MIN_R + (CUP_MAX_R - CUP_MIN_R) * inflateFrac;
+
+    cup.geometry.dispose();
+    cup.geometry = new THREE.LatheGeometry(cupProfile(currentR), 48);
+    const breathe = 1 + Math.sin(t * 1.4) * 0.006;
+    cup.scale.set(breathe, 1, breathe);
+
+    rim.scale.set(currentR / CUP_MIN_R, currentR / CUP_MIN_R, 1);
+    catchDisc.material.opacity = 0.03 + 0.06 * inflateFrac;
+    catchDisc.material.color.set(scenario.locked ? 0xFF4444 : 0xFF7A45);
+
+    // Telescope + actuator rise together with inflation (deploy sequence)
+    const riseY = inflateFrac * 0.35;
+    stage3.position.y = 0.7 + riseY;
+    cup.position.y = CUP_Y + riseY;
+    rim.position.y = CUP_Y + 0.66 + riseY;
+    catchDisc.position.y = CUP_Y + 0.665 + riseY;
+    actPiston.position.y = 0.4 + riseY * 0.5;
+
+    // ── Rain drops: only actually fall when the scenario says it's raining ──
+    drops.forEach((d) => {
+      if (!scenario.rain) { d.visible = false; return; }
+      d.visible = true;
+      d.position.y -= d._speed;
+      const cupTopY = CUP_Y + riseY + 0.66;
+      const landedInCup = d._r <= currentR + 0.05;
+      const landY = landedInCup ? cupTopY : 0.02;
+      if (d.position.y <= landY) {
+        if (landedInCup && inflateFrac > 0.15) {
+          const s = splashes[splashIdx % splashes.length];
+          splashIdx++;
+          s.position.set(d.position.x, landY + 0.005, d.position.z);
+          s.scale.setScalar(1);
+          s.material.opacity = 0.8;
+          s.visible = true;
+          s.userData.life = 0;
+        }
+        d.position.y = d._startY + Math.random() * 1.5;
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * (CUP_MAX_R + 0.6);
+        d._r = r; d._angle = angle;
+        d.position.x = Math.cos(angle) * r;
+        d.position.z = Math.sin(angle) * r;
+      }
+    });
+
+    // Animate splash rings (expand + fade)
+    splashes.forEach(s => {
+      if (!s.visible) return;
+      s.userData.life += 0.045;
+      s.scale.setScalar(1 + s.userData.life * 6);
+      s.material.opacity = Math.max(0, 0.8 - s.userData.life * 1.6);
+      if (s.userData.life > 0.5) s.visible = false;
+    });
+
+    // ── Wind turbine + anemometer spin, scaled to current wind speed ──
+    const spinSpeed = scenario.windKmh * 0.01;
+    rotorGroup.rotation.z += spinSpeed;
+    anemoSpin.rotation.y += spinSpeed * 1.3;
+
+    // Battery: charges from the turbine, drains a little when hydraulics run
+    const chargeRate = scenario.windKmh * 0.0007;
+    const drainRate = shouldDeploy ? 0.012 : 0.003;
+    batteryLevel = Math.max(8, Math.min(100, batteryLevel + chargeRate - drainRate));
+
+    // ── Continuous purification flow (runs on stored water regardless of rain) ──
+    flowParticles.forEach(fp => {
+      fp._t += 0.006;
+      if (fp._t > 1) fp._t -= 1;
+      const segCount = flowPath.length - 1;
+      const segF = fp._t * segCount;
+      const segI = Math.min(Math.floor(segF), segCount - 1);
+      const localT = segF - segI;
+      fp.position.lerpVectors(flowPath[segI], flowPath[segI + 1], localT);
+    });
+
+    // ── HUD (throttled to ~6 updates/sec) ──
+    if (t - lastHudUpdate > 0.16) {
+      lastHudUpdate = t;
+      hudRain.textContent = scenario.rain ? 'DETECTED' : 'NONE';
+      hudRain.className = 'hud-val' + (scenario.rain ? '' : '');
+      hudWind.textContent = `${scenario.windKmh} km/h · ${scenario.windLabel}`;
+      hudWind.className = 'hud-val' + (scenario.locked ? ' lock' : (scenario.windKmh > 30 ? ' warn' : ''));
+      let sysText, sysClass = 'hud-val';
+      if (scenario.locked) { sysText = 'LOCKED — HIGH WIND'; sysClass += ' lock'; }
+      else if (shouldDeploy && inflateFrac > 0.85) { sysText = 'DEPLOYED — COLLECTING'; }
+      else if (shouldDeploy) { sysText = 'EXTENDING…'; sysClass += ' warn'; }
+      else if (inflateFrac > 0.05) { sysText = 'RETRACTING…'; sysClass += ' warn'; }
+      else { sysText = 'RETRACTED — IDLE'; }
+      hudSystem.textContent = sysText;
+      hudSystem.className = sysClass;
+      hudPurifier.textContent = 'CYCLING STORED WATER';
+      hudBattFill.style.width = batteryLevel.toFixed(0) + '%';
+      hudBattFill.style.background = batteryLevel < 25 ? '#FF7A45' : '#6FCF7A';
+    }
+
+    // Sensor LED blink
+    sensLED.material.emissiveIntensity = 0.4 + Math.abs(Math.sin(t * 2.5)) * 0.8;
+    led.material.emissiveIntensity = 0.8 + Math.sin(t * 1.8) * 0.4;
+
+    // UV stage glow pulse
+    uvLight.intensity = 0.4 + Math.sin(t * 3.5) * 0.35;
+
+    // Gentle root rotation
+    root.rotation.y = Math.sin(t * 0.06) * 0.08;
+  }
+
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
